@@ -2,7 +2,7 @@ import csv
 import numpy as np
 
 # Get list of reviewer IDs
-# input file from: /users ==> download "PC info"
+#   - fname: filename of the input file from /users ==> download "PC info"
 def parse_reviewers(fname):
     with open(fname, newline='') as f:
         r = csv.reader(f)
@@ -17,7 +17,7 @@ def parse_reviewers(fname):
 
 
 # Get list of paper IDs
-# input file from: /reviewprefs => download "CSV"
+#   - fname: filename of the input file from /reviewprefs => download "CSV"
 def parse_papers(fname):
     with open(fname, newline='') as f:
         r = csv.reader(f)
@@ -31,8 +31,9 @@ def parse_papers(fname):
 
 
 # Get similarity and conflict matrices of size (#revs, #paps)
-# input file from: /reviewprefs => download "PC review preferences"
-# sim_func is a function from preference (bid) and topic score to overall similarity
+#   - fname: filename of the input file from /reviewprefs => download "PC review preferences"
+#   - reviewer_ids, paper_ids: lists of IDs
+#   - sim_func: function from preference (bid) and topic score to overall similarity
 def sims_from_csv(fname, reviewer_ids, paper_ids, sim_func=lambda p, t: p + t):
     testing = True
 
@@ -62,7 +63,9 @@ def sims_from_csv(fname, reviewer_ids, paper_ids, sim_func=lambda p, t: p + t):
     return S, M
 
 # Write assignment to output file
-# A: {0, 1} assignment matrix of size (#revs, #paps)
+#   - fname: output file name
+#   - A: {0, 1} assignment matrix of size (#revs, #paps)
+#   - reviewer_ids, paper_ids: lists of IDs
 def assignment_to_csv(fname, A, reviewer_ids, paper_ids):
     with open(fname, 'w', newline='') as f:
         w = csv.writer(f)

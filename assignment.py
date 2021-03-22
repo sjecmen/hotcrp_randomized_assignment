@@ -8,6 +8,7 @@ rng = np.random.default_rng()
 
 # Inputs: similarity matrix, conflict matrix, probability limit matrix, reviewer loads, and paper loads
 # Output: fractional assignment value, fractional assignment matrix
+# All matrices of size (#revs, #paps)
 def find_fractional_assignment(S, M, Q, revloads, paploads):
     if type(revloads) == int:
         revloads = np.full(S.shape[0], revloads)
@@ -68,10 +69,11 @@ def find_fractional_assignment(S, M, Q, revloads, paploads):
 
 # Input: fractional assignment matrix
 # Output: {0, 1} deterministic assignment matrix sampled from the fractional assignment
+# All matrices of size (#revs, #paps)
 def sample_assignment(F):
     ffi = FFI()
     nrev, npap = F.shape
-    F = F.T.flatten().astype(np.double)
+    F = F.T.flatten().astype(np.double) # bvn written for size (#paps, #revs)
     Fbuf = ffi.new("double[]", nrev*npap)
     for i in range(F.size):
         Fbuf[i] = F[i]
