@@ -1,0 +1,3 @@
+- run "python bvn_extension_build.py" to build the bvn sampling function.
+- "interface.py" contains functions to parse files from HotCRP
+- "assignment.py" contains functions that perform the randomized assignment
