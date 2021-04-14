@@ -13,6 +13,7 @@ def find_fractional_assignment(S, M, Q, revloads, paploads):
     if type(revloads) == int:
         revloads = np.full(S.shape[0], revloads)
     if type(paploads) == int:
+        print('paper load of', paploads)
         paploads = np.full(S.shape[1], paploads)
 
     model = gp.Model("my_model") 

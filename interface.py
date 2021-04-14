@@ -9,11 +9,15 @@ def parse_reviewers(fname):
         header = next(r)
         assert all([a == b for a, b in zip(header, ['first', 'last', 'email', 'affiliation', 'country', 'roles'])])
         reviewer_ids = []
+        chair_ids = []
         for row in r:
             if 'pc' in row[5] and 'chair' not in row[5]: # can change
                 reviewer_ids.append(row[2])
+            if 'pc' in row[5] and 'chair' in row[5]:
+                chair_ids.append(row[2])
     assert len(reviewer_ids) == len(set(reviewer_ids))
-    return reviewer_ids
+    assert len(chair_ids) == len(set(chair_ids))
+    return reviewer_ids, chair_ids
 
 
 # Get list of paper IDs
@@ -33,15 +37,14 @@ def parse_papers(fname):
 # Get similarity and conflict matrices of size (#revs, #paps)
 #   - fname: filename of the input file from /reviewprefs => download "PC review preferences"
 #   - reviewer_ids, paper_ids: lists of IDs
-#   - sim_func: function from preference (bid) and topic score to overall similarity
-def sims_from_csv(fname, reviewer_ids, paper_ids, sim_func=lambda p, t: p + t):
-    testing = True
-
+def sims_from_csv(fname, reviewer_ids, paper_ids, bid_scale=4, norm=True):
+    print('constructing similarities with scale', bid_scale, 'and norm', norm)
     reviewer_indices = {r: i for i, r in enumerate(reviewer_ids)}
     paper_indices = {p: i for i, p in enumerate(paper_ids)}
 
     shape = (len(reviewer_ids), len(paper_ids))
     S, M = np.zeros(shape), np.zeros(shape)
+    B = np.zeros(shape) # unscaled bids
 
     with open(fname, newline='') as f:
         r = csv.reader(f)
@@ -52,14 +55,42 @@ def sims_from_csv(fname, reviewer_ids, paper_ids, sim_func=lambda p, t: p + t):
             reviewer_id = row[4]
             preference_score = int(row[5]) if row[5] != '' else 0
             topic_score = int(row[6]) if row[6] != '' else 0
-            similarity = sim_func(preference_score, topic_score)
-            conflict = 1 if row[7] == 'conflict' else 0
+            conflict = 1 if row[7] == 'conflict' or preference_score == -100 else 0
+            r = reviewer_indices[reviewer_id]
+            p = paper_indices[paper_id]
 
-            if not testing or (reviewer_id in reviewer_indices and paper_id in paper_indices):
-                r = reviewer_indices[reviewer_id]
-                p = paper_indices[paper_id]
-                S[r, p] = similarity
-                M[r, p] = conflict
+            M[r, p] = conflict
+            if conflict == 1:
+                continue # don't use topic or preference if conflict
+
+            B[r, p] = preference_score
+            S[r, p] = topic_score
+
+    # S contains unscaled topic_scores, so scale to [0, 1]
+    S = (S - np.min(S)) / (np.max(S) - np.min(S))
+    assert(np.all(S >= 0) and np.all(S <= 1))
+    S[M == 1] = 0 # reset to 0 for normalization
+    #print('scaled topics', S)
+
+    for r in range(S.shape[0]): # could remove loop
+        maxbid = np.max(np.abs(B[r, :]))
+        if maxbid > 100:
+            print('WARNING: very large bid of', maxbid, 'detected')
+        if maxbid != 0:
+            B[r, :] /= maxbid
+    assert(np.all(B >= -1) and np.all(B <= 1))
+    #print('scaled bids', B)
+
+    # S and B now contain scaled topic scores and bids, so compute
+    S = np.power(bid_scale, B) * S
+    #print('unnormed sims', S)
+
+    # normalization
+    if norm:
+        for i in range(S.shape[0]): # could remove loop
+            total = np.sum(S[i, :])
+            if total != 0:
+                S[i, :] /= total
     return S, M
 
 # Write assignment to output file
