@@ -7,16 +7,20 @@ def parse_reviewers(fname):
     with open(fname, newline='') as f:
         r = csv.reader(f)
         header = next(r)
-        assert all([a == b for a, b in zip(header, ['first', 'last', 'email', 'affiliation', 'country', 'roles'])])
+        assert all([a == b for a, b in zip(header, ['first', 'last', 'email', 'affiliation', 'country', 'disabled', 'roles'])])
         reviewer_ids = []
         chair_ids = []
         for row in r:
-            if 'pc' in row[5] and 'chair' not in row[5]: # can change
+            disabled = (row[5] != '')
+            if disabled:
+                continue
+            if 'pc' in row[6] and 'chair' not in row[6]:
                 reviewer_ids.append(row[2])
-            if 'pc' in row[5] and 'chair' in row[5]:
+            if 'pc' in row[6] and 'chair' in row[6]:
                 chair_ids.append(row[2])
     assert len(reviewer_ids) == len(set(reviewer_ids))
     assert len(chair_ids) == len(set(chair_ids))
+    print(len(reviewer_ids), len(chair_ids), 'reviewers and chairs read in')
     return reviewer_ids, chair_ids
 
 
@@ -26,11 +30,12 @@ def parse_papers(fname):
     with open(fname, newline='') as f:
         r = csv.reader(f)
         header = next(r)
-        assert all([a == b or b == None for a, b in zip(header, ['ID', 'Title', 'Authors', None, '# Reviews', 'Status', 'OveMer'])])
+        assert all([a == b or b == None for a, b in zip(header, ['ID', 'Title'])])
         paper_ids = []
         for row in r:
             paper_ids.append(row[0])
     assert len(paper_ids) == len(set(paper_ids))
+    print(len(paper_ids), 'papers read in')
     return paper_ids 
 
 
@@ -56,6 +61,8 @@ def sims_from_csv(fname, reviewer_ids, paper_ids, bid_scale=4, norm=True):
             preference_score = int(row[5]) if row[5] != '' else 0
             topic_score = int(row[6]) if row[6] != '' else 0
             conflict = 1 if row[7] == 'conflict' or preference_score == -100 else 0
+            if reviewer_id not in reviewer_indices:
+                continue
             r = reviewer_indices[reviewer_id]
             p = paper_indices[paper_id]
 
