@@ -1,4 +1,5 @@
 import csv
+import json
 import numpy as np
 
 # Get list of reviewer IDs
@@ -7,7 +8,7 @@ def parse_reviewers(fname):
     with open(fname, newline='') as f:
         r = csv.reader(f)
         header = next(r)
-        assert all([a == b for a, b in zip(header, ['first', 'last', 'email', 'affiliation', 'country', 'disabled', 'roles'])])
+        assert all([a == b for a, b in zip(header, ['first', 'last', 'email', 'affiliation', 'country', 'disabled', 'roles', 'collaborators', 'follow'])])
         reviewer_ids = []
         chair_ids = []
         for row in r:
@@ -38,11 +39,63 @@ def parse_papers(fname):
     print(len(paper_ids), 'papers read in')
     return paper_ids 
 
+# Get list of paper primary topics
+#    - fname: filename of the input file from /reviewprefs => download "JSON"
+def parse_paper_tracks(fname, paper_ids):
+    track_to_papers = {}
+    with open(fname) as f:
+        paper_list = json.load(f)
+    for paper in paper_list:
+        pid = str(paper['pid'])
+        track = paper['primary_track_paper?']
+        assert(pid in paper_ids)
+        if track not in track_to_papers:
+            track_to_papers[track] = [pid]
+        else:
+            track_to_papers[track].append(pid)
+    print(len(track_to_papers), 'tracks detected')
+    return track_to_papers 
+
+# Construct matrix of bonus similarities based on primary paper tracks
+#    - reviewer_fname: reviewer file
+#    - paper_json_fname: paper json file
+#    - base_bonus: amount to add per point of interest in track
+def parse_track_bonuses(reviewer_ids, paper_ids, reviewer_fname, paper_json_fname, base_bonus):
+    track_to_papers = parse_paper_tracks(paper_json_fname, paper_ids)
+
+    with open(reviewer_fname, newline='') as f:
+        r = csv.reader(f)
+        header = next(r)
+        assert all([a == b for a, b in zip(header, ['first', 'last', 'email', 'affiliation', 'country', 'disabled', 'roles', 'collaborators', 'follow'])])
+        topics = []
+        base_topic_index = 9
+        for i in range(base_topic_index, len(header)):
+            topic_header = header[i]
+            assert('topic: ' == topic_header[:7])
+            topic = topic_header[7:]
+            topics.append(topic)
+        reviewer_indices = {r: i for i, r in enumerate(reviewer_ids)}
+        paper_indices = {p: i for i, p in enumerate(paper_ids)}
+        T = np.zeros((len(reviewer_ids), len(paper_ids)))
+        for row in r:
+            rid = row[2]
+            if rid not in reviewer_indices:
+                continue
+            r = reviewer_indices[rid]
+            for i in range(base_topic_index, len(row)):
+                topic = topics[i - base_topic_index]
+                s = row[i]
+                level = int(s) if s != '' else 0
+                for pid in track_to_papers[topic]:
+                    p = paper_indices[pid]
+                    T[r, p] = level * base_bonus
+        return T
+ 
 
 # Get similarity and conflict matrices of size (#revs, #paps)
 #   - fname: filename of the input file from /reviewprefs => download "PC review preferences"
 #   - reviewer_ids, paper_ids: lists of IDs
-def sims_from_csv(fname, reviewer_ids, paper_ids, bid_scale=4, norm=True):
+def sims_from_csv(fname, reviewer_ids, paper_ids, bid_scale, norm, T):
     print('constructing similarities with scale', bid_scale, 'and norm', norm)
     reviewer_indices = {r: i for i, r in enumerate(reviewer_ids)}
     paper_indices = {p: i for i, p in enumerate(paper_ids)}
@@ -72,8 +125,11 @@ def sims_from_csv(fname, reviewer_ids, paper_ids, bid_scale=4, norm=True):
 
             B[r, p] = preference_score
             S[r, p] = topic_score
+    print('min and max sims, pre-track', np.min(S), np.max(S))
+    S += T # add in track bonuses
 
     # S contains unscaled topic_scores, so scale to [0, 1]
+    print('min and max sims', np.min(S), np.max(S))
     S = (S - np.min(S)) / (np.max(S) - np.min(S))
     assert(np.all(S >= 0) and np.all(S <= 1))
     S[M == 1] = 0 # reset to 0 for normalization
@@ -109,8 +165,7 @@ def assignment_to_csv(fname, A, reviewer_ids, paper_ids):
         w = csv.writer(f)
         w.writerow(['paper', 'action', 'email', 'reviewtype'])
         w.writerow(['all', 'clearreview', 'all', 'any'])
-        #for pid in paper_ids: # for testing
-        #    w.writerow([pid, 'clearreview', 'all', 'any'])
+
         for i in range(A.shape[0]):
             for j in range(A.shape[1]):
                 if A[i, j] == 1:

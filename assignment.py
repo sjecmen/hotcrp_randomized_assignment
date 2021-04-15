@@ -9,7 +9,7 @@ rng = np.random.default_rng()
 # Inputs: similarity matrix, conflict matrix, probability limit matrix, reviewer loads, and paper loads
 # Output: fractional assignment value, fractional assignment matrix
 # All matrices of size (#revs, #paps)
-def find_fractional_assignment(S, M, Q, revloads, paploads):
+def find_fractional_assignment(S, M, Q, revloads, paploads, revload_lower=0):
     if type(revloads) == int:
         revloads = np.full(S.shape[0], revloads)
     if type(paploads) == int:
@@ -48,6 +48,7 @@ def find_fractional_assignment(S, M, Q, revloads, paploads):
         for j in range(d):
             papers += A[i][j]
         model.addConstr(papers <= revloads[i]) 
+        model.addConstr(papers >= revload_lower[i])
     
     for j in range(d):
         reviewers = 0
